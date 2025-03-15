@@ -1,0 +1,174 @@
+---
+title: "Comparing Omernik L2 Ecoregions and DOI regions for coding eSTZs"
+author: "sagesteppe"
+date: "2025-03-15"
+output: html_document
+---
+
+```{r, setup, include=FALSE}
+knitr::opts_chunk$set(
+  comment = '', fig.width = 6, fig.height = 6
+)
+```
+
+Reviewer 1 makes a very good suggestion that Omernik Level 2 ecoregions would be a better way to designate the rough extent of a data product. This was also our initial thought but we discarded it for a few reasons without really looking too much into it. 
+We investigate this possibility here and in particular address three particular hesitations: 
+
+1) The number of units for labeling, DOI are limited to 12, how many L2 are there? 
+  - Too many ecoregions will be *relatively* hard for people to remember, because they are abbreviated. 
+  
+2) How contiguous are the L2 regions? Many polygons per region may negate their utility. 
+  - The goal of this labeling schema isn't to perfectly convey *where* a region covers, it's to let people choose the relevant file quickly. 
+
+```{r load libraries, message=FALSE, warning = FALSE}
+library(sf)
+library(tidyverse)
+```
+
+
+```{r load data}
+doi <- st_read('../data/DOI_12_Unified_Regions.gpkg', quiet = T) |>
+  select(DOI_NUM = REG_NUM, DOI_NAME = REG_NAME)
+om <- st_read('../data/Omernik_L2_Ecoregions.gpkg', quiet = T) |>
+  select(NA_L2CODE, NA_L2NAME) |>
+  filter(NA_L2NAME != 'WATER')
+
+st_agr(doi) <- 'constant'
+st_agr(om) <- 'constant'
+```
+
+For the purposes of this exploratory investigation, we will restrict the focus to US and territories. 
+However, we should keep in mind a couple things about the use of ecoregions which would be neglected by this approach: 
+  1) Omernik ecoregions cover the entirety of North America. This makes them an obvious choice for collaborations between these nations. 
+  2) World Wildlife Fund ecoregions are actually global, making them a true choice for international collaborations. Note that however, I can not speak to the quality of these for plants and whenever I have done analysis in South America I have used data products developed by other researchers or local government agencies. 
+  
+## Compare the number of ecoregions and DOI regions for the US & Territories
+
+First we will intersect the omernik region to the DOI regions. 
+
+```{r intersect omernik to doi}
+om <- st_intersection(om, st_union(doi))
+
+ggplot() + 
+  geom_sf(data = om)
+```
+
+```{r table of all L2 names}
+length(table(om$NA_L2NAME))
+table(om$NA_L2NAME)
+```
+
+From a raw count perspective there are 25 L2 region for 10 DOI regions (this excludes Puerto Rico and Hawaii, which are not covered by the Omernik system). 
+Obviously those are many more regions to codify and for a practicioner to try and remember. 
+However, even if eSTZs 'catch on' in the East, I think this is a disingenious count. 
+Basically, I know that a few of these regions are really small, and their chances of ending up in the region coding name part of a file name are very low. 
+
+We will remove a few of these very small regions and see what the count looks like at the end. 
+Feel free to poke around with the map, or just look in a GUI or at this pdf link, 
+https://dmap-prod-oms-edc.s3.us-east-1.amazonaws.com/ORD/Ecoregions/cec_na/NA_LEVEL_II.pdf. 
+
+```{r remove small omernik regions}
+
+small_oms <- c(
+  'EVERGLADES',
+  'UPPER GILA MOUNTAINS',
+  'WESTERN SIERRA MADRE PIEDMONT',
+  'TAMAULIPAS-TEXAS SEMIARID PLAIN',
+  'TEXAS-LOUISIANA COASTAL PLAIN'
+ # 'MISSISSIPPI ALLUVIAL AND SOUTHEAST USA COASTAL PLAINS' whoops definitely keep this. 
+)
+
+small_oms <- filter(om, NA_L2NAME %in% small_oms) # save a copy to map them. 
+om <- filter(om, ! NA_L2NAME %in% unique(small_oms$NA_L2NAME))
+
+ggplot() + 
+  geom_sf(data = om) + 
+  geom_sf(data = small_oms, fill = 'red')
+```
+
+These leaves us with 20 L2 Omernik Ecoregions to 10 DOI regions. 
+Unfortunately those are still a lot of codes to remember and use. 
+However, it could be worth it! 
+Let's take a look at how well these compare to DOI regions. 
+
+```{r remove small omernik regions form environment, echo = F}
+rm(small_oms)
+```
+
+## Contiguity of L2 ecoregions 
+
+First we will cast all of the L2 region to ensure that we are counting adjacent areas (weird things occasionally happen with mapping which 'splits' adjacent areas into different polygons). 
+
+```{r count contiguity of parcels, warning = F}
+
+patches <- om |>
+  group_by(NA_L2NAME) |>
+  summarize(geom = st_union(geom)) |>
+  st_cast('MULTIPOLYGON') |>
+  st_cast('POLYGON')
+
+# ok that resulted in more pieces, which is not unexpected as many of these 
+# were multipolgyons. but I think this might be a little disingenuous. 
+# let's toss tiny pieces. 
+areas <- units::set_units(st_area(patches), 'acre')
+
+# 1000 only got it down to 585, which seems biased against reviewer 1.  
+# let's go to 10k which is 278... 
+# OK rhode island is about 1 million acres - let's use that instead. 
+patches <- patches[areas > units::set_units(1e6, 'acre'),]
+# that returns 54 patches, it is a bit difficult for me to justify going much bigger
+# than the smallest US state. 
+```
+
+```{r patches by region}
+table(patches$NA_L2NAME)
+```
+
+These are quite a few non-contiguous patches, which to me totally makes sense and I support it. 
+However, the goal of the file naming is simply to give people an idea of which file to open, and these are pretty bad for that because they vary so much in space, and oftentimes go on for so long. 
+
+```{r plot subset regions, echo = F}
+patches <- st_simplify(patches)
+ggplot(data = patches, aes(fill = NA_L2NAME)) + 
+  geom_sf() + 
+  guides(color = guide_legend(override.aes = list(size = 0.1))) + 
+  theme(
+    legend.title = element_text(size = 7), 
+    legend.text = element_text(size = 5)
+  )
+```
+
+OK, so these are them. Note they are difficult to plot because their are still so many levels, so colours kind of fade out. 
+Unfortunately I think these actually are a bit of a step back from DOI regions.
+For plants of the sagebrush biome we pretty much just end up with 'Cold Desert', for products from the Columbia Plateau, Great Basin, and Colorado Plateau. 
+Unfortunately these products generally do not actually span the L2 regions, they are restricted by funding to subsets so this seems kind of weird. 
+The Western forests are just a massive blob, and I suppose I am not seeing what we gain by splitting across the plains. 
+
+## Other random thoughts 
+
+A few regions are very different, California-Great Basin being the most stark example, and the Upper Colorado Basin being four wildly different areas in my mind
+We think the current naming suggestions is appropriate because the overturn in species between some of these areas are very high. 
+In other words, the California floristic province species do not 'spill' into the Great Basin *that much* in my experience, so once a user has the species in mind, they should be able to cleave the area in their minds. 
+A similar process should occur throughout the other regions, and this is why we opted for up to two naming elements. 
+The products tend to be split between the Colorado Plateau, and the Great Basin currently. 
+Likely due to funding mechanisms, this would result in us just having duplicate starting names: e.g. 'Cold_desert-' which could only be split by the second region, which in this case would probably be 'Western Cordillera' for both. 
+This makes it very difficult for the L2 approach to work. 
+
+Hawaii is not covered by the Omernik ecoregions. 
+However, I do not think eSTZs will 'catch' on there, and the zoning would be intuitively obvious for most of those taxa. 
+It's good to write this down for discussion purposes, but I think this is a moot point. 
+It seems that the same process is happening for Puerto Rico, but again moot. 
+
+
+## Somewhat of an actual summary
+
++ Ecoregions offer a potential for a globally scalable solution. 
+However, Omernik would not be the data set to use for this, rather WWF or an alternative system would be used. 
+
++ L2 ecoregions have double the names to remember relative to DOI regions, which would certainly limit their utility.  
+
++ The L2 ecoregions oftentimes cover discontinuous patches, while the eSTZs cover geographic areas 'focused' over one of these L2 patches. 
+
++ At a surface level the DOI region names can be nebulous where multiple L2 regions meet, but with minimal knowledge of a species range this should be rectified. 
+
++ In the West the L2 ecoregions are pretty vague, 'Cold Desert' and 'Western Cordillera' pretty much eat everything. So using them doesn't seem to rely improve much on conveying *where* a product focuses on, and actually may result in duplicate naming for products which cover ecoregional development hubs (e.g. Great Basin, and Colorado Plateau). 
