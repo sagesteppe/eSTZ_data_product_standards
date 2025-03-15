@@ -159,6 +159,7 @@ However, I do not think eSTZs will 'catch' on there, and the zoning would be int
 It's good to write this down for discussion purposes, but I think this is a moot point. 
 It seems that the same process is happening for Puerto Rico, but again moot. 
 
+Another realization is that they do follow somewhat easy to remember lines. It's not hard to roughly recall the borders of a couple ecoregions, but the DOI regions seem to follow state lines 75% of the time and should be useful for folks to remember where is being referred to. 
 
 ## Somewhat of an actual summary
 
@@ -172,3 +173,5 @@ However, Omernik would not be the data set to use for this, rather WWF or an alt
 + At a surface level the DOI region names can be nebulous where multiple L2 regions meet, but with minimal knowledge of a species range this should be rectified. 
 
 + In the West the L2 ecoregions are pretty vague, 'Cold Desert' and 'Western Cordillera' pretty much eat everything. So using them doesn't seem to rely improve much on conveying *where* a product focuses on, and actually may result in duplicate naming for products which cover ecoregional development hubs (e.g. Great Basin, and Colorado Plateau). 
+
++ Borders coincident with major administrative units generally state lines, and hence eas*ier* to remember. 
