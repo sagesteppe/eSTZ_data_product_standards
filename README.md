@@ -1,1 +1,1 @@
-There are two scripts here, both of which were developed and thought about over a handful of hours, where we consider some of the suggestions from a reviewer for our recently submitted opinion article.
+There are two scripts here, both of which were developed and thought about over a handful of hours, where we consider some of the suggestions from a reviewer for our recently submitted opinion article. 

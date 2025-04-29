@@ -1,0 +1,110 @@
+---
+title: "Comparing number of provisional and empirical seed transfer zones"
+author: "sagesteppe"
+date: "2025-03-15"
+output: html_document
+---
+
+```{r, setup, include=FALSE}
+knitr::opts_chunk$set(
+  comment = '', fig.width = 6, fig.height = 6, message = F
+)
+```
+
+```{r attach libraries}
+library(sf)
+library(tidyverse)
+library(ggpubr)
+getwd()
+```
+
+Define a quick wrapper function which will load the individual standardized eSTZ layers, crop them to domain of the Bower product, and count the number of eSTZ and pSTZ zones. 
+
+```{r define function}
+#' @param x A vector of layer names from the `gdb`. 
+#' @param gdb a path to a geodatabase of vector data sets to be compared to the single pSTZ product.
+#' @param pz A single provisional STZ product e.g. Bower 2013, Mojave Provisional, etc. 
+cnt_pSTZ_per_eSTZ_product <- function(x, gdb, pz){
+  
+  f_estz <- sf::st_read(gdb, layer = x, quiet = TRUE)
+  
+  # one (or maybe two) of the artemisia products include areas in Canada, bower
+  # does not include Canada so we need to crop these down so that our counts are 
+  # accurate. 
+  f_estz <- sf::st_crop(f_estz, pz)
+  
+  # for this analysis the identity of the individual pSTZs within a species does 
+  # not matter. We will simply union all pSTZs within a species to a single multipolygon, after 
+  # counting the number of eSTZs, and then intersect the unioned product with the pSTZs
+  ct_eSTZ <- length(unique(f_estz$SeedZone))
+
+  focal_eSTZ <- sf::st_cast(f_estz, 'MULTIPOLYGON') |>
+    dplyr::summarize(geometry = sf::st_union(geom)) |>
+    sf::st_make_valid()
+  
+  # now intersect the eSTZ blob to the pSTZs. this count is the number of 
+  # pstz zones which would be used if guiding restoration planning over the focal
+  # estz area. 
+  ct_pstz_per_estz <- sum(lengths(sf::st_intersects(pz, focal_eSTZ)) > 0)
+  
+  data.frame(
+    ct_eSTZ = ct_eSTZ, 
+    ct_pSTZ = ct_pstz_per_estz,
+    product = x
+  )
+}
+```
+
+Load the data we require to make the comparison. 
+
+```{r connect to geopackage of eSTZs and load pSTZs}
+p_prov <- file.path('/media', 'steppe', 'hdd', 'EmpiricalSeedZones', 'data', 'geodata', 'raw_provisional')
+f_prov <- list.files(p_prov, recursive = TRUE, pattern = '.shp$')
+
+# I waffled back and forth on this, but we only have 25 eSTZs total (subdivided into various types)
+# so let's only compare them to the bower groups, that should give us some values
+# which are less... wishy washy.  
+
+pz <- st_read(file.path(p_prov, f_prov[grep('Bower2013', f_prov)]), quiet = T) |>
+  sf::st_transform(4326) |>
+  group_by(seed_zone) |>
+  sf::st_make_valid() |> # this will make a single multipolygon for each seed 
+  summarize(geometry = sf::st_union(geometry)) # zone, so the number of rows
+  # is equivalent to the number of total seed zones. 
+  
+p_emp <- file.path('/media', 'steppe', 'hdd', 'EmpiricalSeedZones', 'RetroactivelyStandardized.gpkg')
+eSTZs <- st_layers(p_emp)
+lnames <- eSTZs$name # use as a vector. 
+```
+
+Apply the function to count the seed zones. 
+
+```{r Count zones, warning=FALSE, message=FALSE}
+stz_counts <- lapply(lnames, FUN = cnt_pSTZ_per_eSTZ_product, gdb = p_emp, pz = pz) |>
+  bind_rows()|>
+  pivot_longer(-product)
+```
+
+Finally, plot the results, and just write the results of the comparision onto the plot. 
+```{r Plot results}
+ggpaired(
+  stz_counts,
+  x = "name",
+  y = "value",
+  color = 'name',
+  line.color = "gray", 
+  line.size = 0.4,
+  palette = "npg") + 
+  stat_compare_means(paired = TRUE, method = "wilcox.test") + 
+  ylim(0, 60) + 
+  labs(
+    title = 'Count of Seed Zones', 
+    subtitle = 'comparing provisional (Bower 2013) to empirical', 
+    caption = 'n = 25') +
+  theme(legend.position = "none") + 
+  scale_x_discrete(
+    name = 'Data set type',
+    labels=c("ct_eSTZ" = "Empirical", 'ct_pSTZ'= 'Provisional')
+    )
+```
+

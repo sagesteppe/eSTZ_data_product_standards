@@ -11,7 +11,8 @@ knitr::opts_chunk$set(
 )
 ```
 
-Reviewer 1 makes a very good suggestion that Omernik Level 2 ecoregions would be a better way to designate the rough extent of a data product. This was also our initial thought but we discarded it for a few reasons without really looking too much into it. 
+Reviewer 1 makes a very good suggestion that Omernik Level 2 ecoregions would be a better way to designate the rough extent of a data product. 
+This was also our initial thought but we discarded it for a few reasons without really looking too much into it. 
 We investigate this possibility here and in particular address three particular hesitations: 
 
 1) The number of units for labeling, DOI are limited to 12, how many L2 are there? 
